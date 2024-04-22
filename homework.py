@@ -6,6 +6,7 @@ class MLP:
         self.hidden_layers = hidden_layers
         self.hidden_nodes = hidden_nodes
         self.output_size = output_size
+        self.num_layers = hidden_layers + 1
         self.weights = []
         self.biases = []
         self.weights.append(np.random.rand(self.hidden_nodes[0], self.input_size))
@@ -14,7 +15,7 @@ class MLP:
             self.weights.append(np.random.rand(self.hidden_nodes[i + 1], self.hidden_nodes[i]))
             self.biases.append(np.random.rand(self.hidden_nodes[i], 1))
         self.weights.append(np.random.rand(self.output_size, self.hidden_nodes[-1]))
-        self.biases.append(np.random.rand(1, 1))
+        self.biases.append(np.random.rand(self.output_size, 1))
 
     def print_weights(self):
         for i in range(len(self.weights)):
@@ -30,22 +31,18 @@ class MLP:
 
     def forward_propagation(self, x):
         activations = [x]
-        for i in range(self.hidden_layers):
+        for i in range(self.num_layers):
             z = np.dot(self.weights[i], activations[-1]) + self.biases[i]
             a = self.relu(z)
             activations.append(a)
-        weight = np.array(self.weights[-1])
-        output = np.dot(self.weights[-1], activations[-1]) + self.biases[-1]
-        return output, activations
+        return activations
 
-    def backpropagation(self, x, y, output, activations, learning_rate):
-        delta = output - y
+    def backpropagation(self, x, y, activations, learning_rate):
+        delta = activations[-1] - y
         for i in range(self.hidden_layers, -1, -1):
             dz = delta if i == self.hidden_layers else np.dot(self.weights[i + 1].T, delta) * self.relu_derivative(activations[i + 1])
             dw = np.dot(dz, activations[i].T)
             db = dz
-            w = np.array(self.weights[i])
-            deltaw = np.array(dw)
             self.weights[i] -= learning_rate * dw
             self.biases[i] -= learning_rate * db
             delta = dz
@@ -55,15 +52,15 @@ class MLP:
             for i in range(X.shape[1]):
                 x = X[:, i].reshape(-1, 1)
                 y_true = y[:, i].reshape(-1, 1)
-                output, activations = self.forward_propagation(x)
-                self.backpropagation(x, y_true, output, activations, learning_rate)
+                activations = self.forward_propagation(x)
+                self.backpropagation(x, y_true, activations, learning_rate)
 
     def predict(self, X):
         predictions = []
         for i in range(X.shape[1]):
             x = X[:, i].reshape(-1, 1)
-            output, _ = self.forward_propagation(x)
-            predictions.append(output)
+            activations = self.forward_propagation(x)
+            predictions.append(activations[-1])
         return np.hstack(predictions)
 
     def relu(self, z):
@@ -78,7 +75,7 @@ hidden_layers = 2  # Number of hidden layers
 hidden_nodes = [8, 8]  # Number of nodes in each hidden layer
 output_size = 1  # Number of output units
 learning_rate = 0.01
-epochs = 1000
+epochs = 1
 
 mlp = MLP(input_size, hidden_layers, hidden_nodes, output_size)
 # mlp.print_weights()
