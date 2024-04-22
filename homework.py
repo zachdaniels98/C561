@@ -6,17 +6,15 @@ class MLP:
         self.hidden_layers = hidden_layers
         self.hidden_nodes = hidden_nodes
         self.output_size = output_size
-
-        # Initialize weights and biases
         self.weights = []
         self.biases = []
-        self.weights.append(np.random.rand(self.input_size, self.hidden_nodes[0]))
-        self.biases.append(np.random.rand(1, self.hidden_nodes[0]))
+        self.weights.append(np.random.rand(self.hidden_nodes[0], self.input_size))
+        self.biases.append(np.random.rand(self.hidden_nodes[0], 1))
         for i in range(hidden_layers - 1):
-            self.weights.append(np.random.rand(self.hidden_nodes[i], self.hidden_nodes[i + 1]))
-            self.biases.append(np.random.rand(1, self.hidden_nodes[i]))
-        self.weights.append(np.random.rand(self.hidden_nodes[-1], self.output_size))
-        self.biases.append(np.random.rand(1, self.hidden_nodes[-1]))
+            self.weights.append(np.random.rand(self.hidden_nodes[i + 1], self.hidden_nodes[i]))
+            self.biases.append(np.random.rand(self.hidden_nodes[i], 1))
+        self.weights.append(np.random.rand(self.output_size, self.hidden_nodes[-1]))
+        self.biases.append(np.random.rand(1, 1))
 
     def print_weights(self):
         for i in range(len(self.weights)):
@@ -31,8 +29,6 @@ class MLP:
             print(b.shape)
 
     def forward_propagation(self, x):
-        arr = np.array(x)
-        print(arr)
         activations = [x]
         for i in range(self.hidden_layers):
             z = np.dot(self.weights[i], activations[-1]) + self.biases[i]
@@ -44,14 +40,12 @@ class MLP:
 
     def backpropagation(self, x, y, output, activations, learning_rate):
         delta = output - y
-        print(output)
         for i in range(self.hidden_layers, -1, -1):
             dz = delta if i == self.hidden_layers else np.dot(self.weights[i + 1].T, delta) * self.relu_derivative(activations[i + 1])
             dw = np.dot(dz, activations[i].T)
             db = dz
             w = np.array(self.weights[i])
             deltaw = np.array(dw)
-            print(w.shape, deltaw.shape, i)
             self.weights[i] -= learning_rate * dw
             self.biases[i] -= learning_rate * db
             delta = dz
