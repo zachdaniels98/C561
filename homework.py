@@ -38,14 +38,19 @@ class MLP:
         return activations
 
     def backpropagation(self, x, y, activations, learning_rate):
-        delta = activations[-1] - y
-        for i in range(self.hidden_layers, -1, -1):
-            dz = delta if i == self.hidden_layers else np.dot(self.weights[i + 1].T, delta) * self.relu_derivative(activations[i + 1])
-            dw = np.dot(dz, activations[i].T)
-            db = dz
-            self.weights[i] -= learning_rate * dw
-            self.biases[i] -= learning_rate * db
-            delta = dz
+        print(x.shape[0])
+        outout_error = activations[-1] - y
+        output_delta = outout_error * self.relu_derivative(activations[-1])
+        self.weights[-1] -= learning_rate * np.outer(output_delta, activations[-1])
+        # self.biases[-1] -= learning_rate * output_delta
+
+        for i in range(self.num_layers - 2, -1, -1):
+            # print(i)
+            hidden_error = np.dot(self.weights[i + 1].T, output_delta)
+            hidden_delta = hidden_error * self.relu_derivative(activations[i + 1])
+            self.weights[i] -= learning_rate * np.outer(hidden_delta, activations[i])
+            self.biases[i] -= learning_rate * hidden_delta
+            output_delta = hidden_delta
 
     def train(self, X, y, epochs, learning_rate):
         for _ in range(epochs):
@@ -90,5 +95,5 @@ mlp.train(X, y, epochs, learning_rate)
 
 # Make predictions
 test_X = np.random.rand(input_size, 10)
-predictions = mlp.predict(test_X)
-print("MLP predictions:", predictions)
+# predictions = mlp.predict(test_X)
+# print("MLP predictions:", predictions)
