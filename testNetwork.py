@@ -21,12 +21,37 @@ class MLP:
         layer_sizes = [input_size] + list(hidden_layer_sizes) + [output_size]
         for i in range(len(layer_sizes) - 1):
             self.weights.append(np.random.rand(layer_sizes[i], layer_sizes[i + 1]))
-            self.biases.append(np.zeros(layer_sizes[i + 1]))
+            self.biases.append(np.random.rand(layer_sizes[i + 1]))
 
     def relu(self, x):
         """ReLU activation function."""
         return np.maximum(0, x)
+    
+    def relu_derivative(x):
+        return np.where(x > 0, 1, 0)
 
+    def sigmoid(self, z):
+        """
+        Computes the sigmoid activation function.
+        Args:
+            z (numpy.ndarray): Input value.
+        Returns:
+            numpy.ndarray: Output after applying the sigmoid function.
+        """
+        return 1 / (1 + np.exp(-z))
+    
+    def sigmoid_derivative(self, z):
+        """
+        Computes the derivative of the sigmoid function.
+        Args:
+            z (numpy.ndarray): Input value.
+        Returns:
+            numpy.ndarray: Derivative of the sigmoid function.
+        """
+        sigmoid_z = self.sigmoid(z)
+        return sigmoid_z * (1 - sigmoid_z)
+
+    
     def forward(self, X):
         """
         Forward pass through the network.
@@ -39,9 +64,10 @@ class MLP:
         A = X
         for i in range(len(self.hidden_layer_sizes)):
             Z = np.dot(A, self.weights[i]) + self.biases[i]
-            A = self.relu(Z)
+            A = self.sigmoid(Z)
             self.hidden_outputs.append(A)
-        self.output = np.dot(A, self.weights[-1]) + self.biases[-1]
+        output_Z = np.dot(A, self.weights[-1]) + self.biases[-1]
+        self.output = self.relu(output_Z)
         self.output = np.round(self.output).astype(int)
         return self.output
 
@@ -55,12 +81,10 @@ class MLP:
         """
         batch_size = X.shape[0]
         error = self.output - y
-        print("error: ", error)
 
         # Backpropagate through output layer
         d_weights_output = np.dot(self.hidden_outputs[-1].T, error) / batch_size
         d_biases_output = np.sum(error, axis=0) / batch_size
-        print(d_weights_output)
 
         # Update weights and biases for output layer
         self.weights[-1] -= learning_rate * d_weights_output
@@ -68,11 +92,18 @@ class MLP:
 
         # Backpropagate through hidden layers
         for i in range(len(self.hidden_layer_sizes) - 1, 0, -1):
-            error = np.dot(error, self.weights[i + 1].T) * (self.hidden_outputs[i] > 0)
+            error = np.dot(error, self.weights[i + 1].T) * self.sigmoid_derivative(self.hidden_outputs[i])
             d_weights_hidden = np.dot(self.hidden_outputs[i - 1].T, error) / batch_size
             d_biases_hidden = np.sum(error, axis=0) / batch_size
             self.weights[i] -= learning_rate * d_weights_hidden
             self.biases[i] -= learning_rate * d_biases_hidden
+
+        pre_rounded_output = np.dot(self.hidden_outputs[-1], self.weights[-1]) + self.biases[-1]
+        output_error = pre_rounded_output - y
+        d_weights_output = np.dot(self.hidden_outputs[-1].T, output_error) / batch_size
+        d_biases_output = np.sum(output_error, axis=0) / batch_size
+        self.weights[-1] -= learning_rate * d_weights_output
+        self.biases[-1] -= learning_rate * d_biases_output
 
     def compute_accuracy(self, X, y):
         """
@@ -88,20 +119,8 @@ class MLP:
         total_samples = y.shape[0]
         accuracy = correct_predictions / total_samples
         return accuracy
-    
-    def clip_gradients(self, max_norm=1.0):
-        """
-        Clip gradients to prevent exploding gradients.
-        Args:
-            max_norm (float): Maximum allowed gradient norm.
-        """
-        for i in range(len(self.weights)):
-            weight_grad_norm = np.linalg.norm(self.weights_grad[i])
-            if weight_grad_norm > max_norm:
-                scale_factor = max_norm / (weight_grad_norm + 1e-8)  # Avoid division by zero
-                self.weights_grad[i] *= scale_factor
 
-    def train(self, X, y, X_test, y_test, epochs=1000, learning_rate=0.01, max_norm=1.0):
+    def train(self, X, y, X_test, y_test, epochs=1000, learning_rate=0.01, batch_size=32):
         """
         Train the MLP using backpropagation.
         Args:
@@ -110,14 +129,27 @@ class MLP:
             epochs (int): Number of training iterations.
             learning_rate (float): Learning rate for weight updates.
         """
+        def learning_rate_schedule(epoch):
+            # Example: Reduce learning rate by half every 10 epochs
+            if epoch % 10 == 0:
+                return learning_rate / 2
+            else:
+                return learning_rate
+
         train_accuracies = []
         test_accuracies = []
         for epoch in range(epochs):
-            self.forward(X)
-            print(self.forward(X))
-            self.backward(X, y, learning_rate)
+            current_learning_rate = learning_rate_schedule(epoch)
 
-            self.clip_gradients(max_norm)
+            for batch_start in range(0, X.shape[0], batch_size):
+                batch_X = X[batch_start : batch_start + batch_size]
+                batch_y = y[batch_start : batch_start + batch_size]
+
+                self.forward(batch_X)
+                self.backward(batch_X, batch_y, current_learning_rate)
+            
+            # validation_accuracy = self.compute_accuracy(X_test, y_test)
+            # print(f"Epoch {epoch + 1}/{epochs} - Validation Accuracy: {validation_accuracy:.4f}")
 
             train_accuracy = self.compute_accuracy(X, y)
             train_accuracies.append(train_accuracy)
@@ -182,7 +214,7 @@ class DataReader:
         numeric_type_column = np.array([type_mapping[word.split()[0]] for word in type_column], dtype=int)
 
         # Create the final NumPy array
-        input_array = np.column_stack((numeric_type_column, price_column, bath_column, propertysqft_column))
+        input_array = np.column_stack((price_column, bath_column, propertysqft_column))
 
         # Print the final array (you can save it to a file if needed)
         return input_array.astype(float)
@@ -208,35 +240,29 @@ class DataReader:
 
 # Example usage:
 if __name__ == "__main__":
-    input_size = 4
-    hidden_layer_sizes = (8, 8)  # Two hidden layers with 8 nodes each
+    input_size = 3
+    hidden_layer_sizes = [50, 100, 50]  # Two hidden layers with 8 nodes each
     output_size = 1
     mlp = MLP(input_size, hidden_layer_sizes, output_size)
 
-    # Generate random input and labels for demonstration
-    X_train = np.random.rand(100, input_size)
-    y_train = np.random.randint(0, 2, size=(100, output_size))
-    X_test = np.random.rand(20, input_size)
-    y_test = np.random.randint(0, 2, size=(20, output_size))
-
-    dr = DataReader(2)
+    dr = DataReader(5)
     X_train = dr.get_train_data()
     y_train = dr.get_train_label()
     X_test = dr.get_test_data()
     y_test = dr.get_test_label()
 
-    value = 301
-    # print(X_train[value])
+    # # print(X_train[value])
     X_train_standardized = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
-    X_train = np.array([X_train_standardized[value]])
-    y_train = np.array([y_train[value]])
+    X_train = np.array(X_train_standardized)
+    y_train = np.array(y_train)
     # print(X_train)
-    print(y_train)
+    # print(y_train)
     # print(mlp.forward(first_sample))
-    # X_test_standardized = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
+    X_test_standardized = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
+    X_test = np.array(X_test_standardized)
 
     # Train the MLP and track accuracy
-    mlp.train(X_train, y_train, X_test, y_test, epochs=5, learning_rate=0.1)
+    mlp.train(X_train, y_train, X_test, y_test, epochs=100, learning_rate=0.0001, batch_size=32)
     # predictions = mlp.forward(X_test_standardized)
 
     # Print the predictions (you can modify this part based on your specific use case)
