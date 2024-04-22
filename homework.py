@@ -31,6 +31,8 @@ class MLP:
             print(b.shape)
 
     def forward_propagation(self, x):
+        arr = np.array(x)
+        print(arr)
         activations = [x]
         for i in range(self.hidden_layers):
             z = np.dot(self.weights[i], activations[-1]) + self.biases[i]
@@ -85,17 +87,17 @@ learning_rate = 0.01
 epochs = 1000
 
 mlp = MLP(input_size, hidden_layers, hidden_nodes, output_size)
-mlp.print_weights()
-mlp.print_biases()
+# mlp.print_weights()
+# mlp.print_biases()
 
 # Generate random input data and labels
 X = np.random.rand(input_size, 100)
 y = np.random.rand(output_size, 100)
 
 # Train the MLP
-# mlp.train(X, y, epochs, learning_rate)
+mlp.train(X, y, epochs, learning_rate)
 
 # Make predictions
 test_X = np.random.rand(input_size, 10)
-# predictions = mlp.predict(test_X)
-# print("MLP predictions:", predictions)
+predictions = mlp.predict(test_X)
+print("MLP predictions:", predictions)
