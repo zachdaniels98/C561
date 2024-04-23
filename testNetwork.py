@@ -22,12 +22,16 @@ class MLP:
         for i in range(len(layer_sizes) - 1):
             self.weights.append(np.random.rand(layer_sizes[i], layer_sizes[i + 1]))
             self.biases.append(np.random.rand(layer_sizes[i + 1]))
-
+    
+    def softmax(self, x):
+        e_x = np.exp(x - np.max(x, axis=1, keepdims=True))  # Numerically stable version
+        return e_x / e_x.sum(axis=1, keepdims=True)
+        
     def relu(self, x):
         """ReLU activation function."""
         return np.maximum(0, x)
     
-    def relu_derivative(x):
+    def relu_derivative(self, x):
         return np.where(x > 0, 1, 0)
 
     def sigmoid(self, z):
@@ -67,9 +71,9 @@ class MLP:
             A = self.sigmoid(Z)
             self.hidden_outputs.append(A)
         output_Z = np.dot(A, self.weights[-1]) + self.biases[-1]
-        self.output = self.relu(output_Z)
-        self.output = np.round(self.output).astype(int)
-        return self.output
+        self.output = self.softmax(output_Z)
+        # self.output = np.round(self.output).astype(int)
+        return self.translate_output(self.output)
 
     def backward(self, X, y, learning_rate=0.01):
         """
@@ -79,8 +83,13 @@ class MLP:
             y (numpy.ndarray): Ground truth labels (shape: [batch_size, output_size]).
             learning_rate (float): Learning rate for weight updates.
         """
+        labeled_y = self.label_classes(y)
+        encoding = np.eye(10)[labeled_y]
+        loss = -np.sum(encoding * np.log(self.output + 1e-10)) / X.shape[0]
+        print(loss)
+
         batch_size = X.shape[0]
-        error = self.output - y
+        error = self.output - encoding
 
         # Backpropagate through output layer
         d_weights_output = np.dot(self.hidden_outputs[-1].T, error) / batch_size
@@ -98,13 +107,86 @@ class MLP:
             self.weights[i] -= learning_rate * d_weights_hidden
             self.biases[i] -= learning_rate * d_biases_hidden
 
-        pre_rounded_output = np.dot(self.hidden_outputs[-1], self.weights[-1]) + self.biases[-1]
-        output_error = pre_rounded_output - y
-        d_weights_output = np.dot(self.hidden_outputs[-1].T, output_error) / batch_size
-        d_biases_output = np.sum(output_error, axis=0) / batch_size
-        self.weights[-1] -= learning_rate * d_weights_output
-        self.biases[-1] -= learning_rate * d_biases_output
+        # pre_rounded_output = np.dot(self.hidden_outputs[-1], self.weights[-1]) + self.biases[-1]
+        # output_error = pre_rounded_output - y
+        # d_weights_output = np.dot(self.hidden_outputs[-1].T, output_error) / batch_size
+        # d_biases_output = np.sum(output_error, axis=0) / batch_size
+        # self.weights[-1] -= learning_rate * d_weights_output
+        # self.biases[-1] -= learning_rate * d_biases_output
+        return loss
 
+    def label_classes(self, y):
+        y = y.squeeze()
+
+        classes = {
+            1: 0,
+            2: 1,
+            3: 2,
+            4: 3,
+            5: 4,
+            6: 5,
+            7: 6,
+            8: 7,
+            9: 8,
+            10: 9,
+            11: 9,
+            12: 9,
+            13: 9,
+            14: 9,
+            15: 9,
+            16: 9,
+            18: 9,
+            19: 9,
+            20: 9,
+            24: 9,
+            30: 9,
+            32: 9,
+            35: 9,
+            36: 9,
+            40: 9,
+            42: 9,
+            50: 9
+        }
+
+        new_list = [classes[value] for value in y]
+
+        return new_list
+    
+    def translate_output(self, output):
+        classes = {
+            1: 0,
+            2: 1,
+            3: 2,
+            4: 3,
+            5: 4,
+            6: 5,
+            7: 6,
+            8: 7,
+            9: 8,
+            10: 9,
+            11: 9,
+            12: 9,
+            13: 9,
+            14: 9,
+            15: 9,
+            16: 9,
+            18: 9,
+            19: 9,
+            20: 9,
+            24: 9,
+            30: 9,
+            32: 9,
+            35: 9,
+            36: 9,
+            40: 9,
+            42: 9,
+            50: 9
+        }
+
+        result = np.argmax(output, axis=1)
+        result = result.reshape(-1, 1)
+        return np.vectorize(classes.get)(result)
+    
     def compute_accuracy(self, X, y):
         """
         Compute accuracy for a given dataset.
@@ -168,7 +250,6 @@ class MLP:
         plt.legend()
         plt.grid(True)
         plt.show()
-
 
 class DataReader:
     def __init__(self, data=1):
@@ -238,33 +319,56 @@ class DataReader:
 
         return beds.astype(float)
 
+def min_max_normalize(data):
+    min_val = np.min(data)
+    max_val = np.max(data)
+    normalized_data = (data - min_val) / (max_val - min_val)
+    return normalized_data
+
 # Example usage:
 if __name__ == "__main__":
     input_size = 3
-    hidden_layer_sizes = [50, 100, 50]  # Two hidden layers with 8 nodes each
-    output_size = 1
+    hidden_layer_sizes = [50, 100]
+    output_size = 10
     mlp = MLP(input_size, hidden_layer_sizes, output_size)
 
-    dr = DataReader(5)
+    dr = DataReader(4)
     X_train = dr.get_train_data()
     y_train = dr.get_train_label()
     X_test = dr.get_test_data()
     y_test = dr.get_test_label()
 
-    # # print(X_train[value])
-    X_train_standardized = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
-    X_train = np.array(X_train_standardized)
-    y_train = np.array(y_train)
-    # print(X_train)
-    # print(y_train)
-    # print(mlp.forward(first_sample))
-    X_test_standardized = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
-    X_test = np.array(X_test_standardized)
+    # X_train_standardized = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
+    # X_train = X_train_standardized
+    # X_test_standardized = (X_test - np.mean(X_test, axis=0)) / np.std(X_test, axis=0)
+    # X_test = X_test_standardized
+
+    # Normalize the data
+    X_train = min_max_normalize(X_train)
+    X_test = min_max_normalize(X_test)
 
     # Train the MLP and track accuracy
-    mlp.train(X_train, y_train, X_test, y_test, epochs=100, learning_rate=0.0001, batch_size=32)
-    # predictions = mlp.forward(X_test_standardized)
+    mlp.train(X_train, y_train, X_test, y_test, epochs=3, learning_rate=0.01, batch_size=100)
 
-    # Print the predictions (you can modify this part based on your specific use case)
-    # print("Predictions:")
-    # print(predictions)
+
+    dr1 = DataReader(1)
+    dr2 = DataReader(2)
+    dr3 = DataReader(3)
+    dr4 = DataReader(4)
+    dr5 = DataReader(5)
+
+    train1 = dr1.get_train_label()
+    test1 = dr1.get_test_label()
+    train2 = dr2.get_train_label()
+    test2 = dr2.get_test_label()
+    train3 = dr3.get_train_label()
+    test3 = dr3.get_test_label()
+    train4 = dr4.get_train_label()
+    test4 = dr4.get_test_label()
+    train5 = dr5.get_train_label()
+    test5 = dr5.get_test_label()
+
+    total = np.concatenate((train1, test1, train2, test2, train3, test3, train4, test4, train5, test5))
+
+    values = np.unique(total)
+    # print(values) 

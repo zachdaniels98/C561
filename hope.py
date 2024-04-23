@@ -1,93 +1,75 @@
 import numpy as np
 
 class MLP:
-    def __init__(self, input_size, hidden_sizes, output_size):
-        """
-        Initialize the MLP.
-
-        Args:
-            input_size (int): Number of input features.
-            hidden_sizes (list of int): Sizes of hidden layers (e.g., [128, 64]).
-            output_size (int): Number of output classes (1 in your case).
-        """
+    def __init__(self, input_size, hidden_layers, hidden_nodes, output_classes):
         self.input_size = input_size
-        self.hidden_sizes = hidden_sizes
-        self.output_size = output_size
-        self.network_depth = len(hidden_sizes) + 2  # Input + hidden + output layers
+        self.hidden_layers = hidden_layers
+        self.hidden_nodes = hidden_nodes
+        self.output_classes = output_classes
+        self.weights = []
+        self.biases = []
+        self.activations = []
 
-        # Initialize weights and biases
-        self.weights = [self._kaiming_init(l) for l in range(self.network_depth - 1)]
-        self.biases = [np.zeros((size, 1)) for size in hidden_sizes + [output_size]]
+        # Initialize weights and biases for hidden layers
+        for layer in range(self.hidden_layers):
+            if layer == 0:
+                self.weights.append(np.random.randn(self.input_size, self.hidden_nodes))
+            else:
+                self.weights.append(np.random.randn(self.hidden_nodes, self.hidden_nodes))
+            self.biases.append(np.zeros((1, self.hidden_nodes)))
+            self.activations.append(np.zeros((1, self.hidden_nodes)))
 
-    def _kaiming_init(self, layer):
-        """
-        Initialize weights using Kaiming He's method.
+        # Initialize weights and biases for output layer
+        self.weights.append(np.random.randn(self.hidden_nodes, self.output_classes))
+        self.biases.append(np.zeros((1, self.output_classes)))
 
-        Args:
-            layer (int): Layer index.
+    def forward(self, X):
+        # Forward pass through hidden layers
+        for layer in range(self.hidden_layers):
+            self.activations[layer] = np.maximum(0, np.dot(X, self.weights[layer]) + self.biases[layer])
+            X = self.activations[layer]
 
-        Returns:
-            np.ndarray: Initialized weights for the layer.
-        """
-        fan_in = self.hidden_sizes[layer - 1] if layer > 0 else self.input_size
-        return np.random.randn(self.hidden_sizes[layer], fan_in) * np.sqrt(2 / fan_in)
-
-    def forward(self, x):
-        """
-        Forward pass through the network.
-
-        Args:
-            x (np.ndarray): Input data (shape: (batch_size, input_size)).
-
-        Returns:
-            np.ndarray: Predicted output (shape: (batch_size, output_size)).
-        """
-        # Apply ReLU activation to hidden layers
-        hidden_outputs = [x]
-        for l in range(self.network_depth - 2):
-            z = np.dot(self.weights[l], hidden_outputs[-1]) + self.biases[l]
-            hidden_outputs.append(np.maximum(0, z))
-
-        # Apply sigmoid activation to output layer
-        output = 1 / (1 + np.exp(-(np.dot(self.weights[-1], hidden_outputs[-1]) + self.biases[-1])))
-
+        # Output layer
+        output = np.dot(X, self.weights[-1]) + self.biases[-1]
         return output
 
-    def calculate_loss(self, y_true, y_pred):
-        """
-        Calculate L2 loss.
+    def train(self, X, y, learning_rate=0.001, epochs=1000):
+        for epoch in range(epochs):
+            # Forward pass
+            output = self.forward(X)
 
-        Args:
-            y_true (np.ndarray): True labels (shape: (batch_size, output_size)).
-            y_pred (np.ndarray): Predicted labels (shape: (batch_size, output_size)).
+            # Compute loss (cross-entropy for multi-class classification)
+            loss = -np.sum(y * np.log(output + 1e-10)) / len(X)
 
-        Returns:
-            float: L2 loss.
-        """
-        return np.mean((y_true - y_pred) ** 2)
+            # Backpropagation
+            delta = output - y
+            for layer in range(self.hidden_layers, -1, -1):
+                dW = np.dot(self.activations[layer - 1].T, delta) / len(X)
+                db = np.sum(delta, axis=0) / len(X)
+                delta = np.dot(delta, self.weights[layer - 1].T) * (self.activations[layer - 1] > 0)
+                self.weights[layer - 1] -= learning_rate * dW
+                self.biases[layer - 1] -= learning_rate * db
 
-    def activate(self, x):
-        """
-        Apply ReLU activation function.
+            if epoch % 100 == 0:
+                print(f"Epoch {epoch}: Loss = {loss:.4f}")
 
-        Args:
-            x (np.ndarray): Input data.
+    def predict(self, X):
+        return np.argmax(self.forward(X), axis=1)
 
-        Returns:
-            np.ndarray: Activated output.
-        """
-        return np.maximum(0, x)
-
-# Example usage:
+# Example usage
 if __name__ == "__main__":
-    # Create an MLP with 3 hidden layers (128 neurons each)
-    network_config = (4, [128, 128, 128], 1)
-    mlp = MLP(*network_config)
+    # Generate random data for demonstration
+    num_samples = 100
+    input_size = 3
+    output_classes = 3
+    X = np.random.randn(num_samples, input_size)
+    y = np.random.randint(output_classes, size=num_samples)
+    y_one_hot = np.eye(output_classes)[y]
 
-    # Generate random input data (batch_size = 10)
-    batch_size = 10
-    input_data = np.random.rand(batch_size, 4)
+    mlp = MLP(input_size, hidden_layers=3, hidden_nodes=50, output_classes=output_classes)
+    mlp.train(X, y_one_hot, learning_rate=0.01, epochs=1000)
 
-    # Forward pass
-    output = mlp.forward(input_data)
-    print("Predicted output:\n", output)
+    # Make predictions
+    test_X = np.random.randn(10, input_size)
+    predictions = mlp.predict(test_X)
+    print("Predictions:", predictions)
